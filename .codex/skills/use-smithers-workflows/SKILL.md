@@ -23,6 +23,7 @@ Check these files first before making changes:
 - `smithers.config.ts`
 - `.smithers/workflows/implement-review-fix.tsx`
 - `.smithers/workflows/ci-babysit.tsx`
+- `.smithers/workflows/ci-watch-babysit.tsx`
 - `.smithers/workflows/pr-babysit.tsx`
 - `.smithers/components/ImplementReviewFixLoop.tsx`
 - `.smithers/components/ReviewLean.tsx`
@@ -44,6 +45,8 @@ Start from the nearest existing workflow:
   - Use for coding loops that should implement, validate, review for safety/correctness/leanness, fix findings, and converge.
 - `ci-babysit`
   - Use for GitHub Actions inspection, failure classification, deterministic fix-up, and rerun decisions.
+- `ci-watch-babysit`
+  - Use for long-running GitHub Actions monitoring with durable timer-based backoff, reruns, and fix loops.
 - `pr-babysit`
   - Use for pull request inspection, actionable review handling, and deterministic patching.
 

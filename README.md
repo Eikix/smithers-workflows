@@ -13,6 +13,10 @@ Private Smithers workflow library for repeatable coding and GitHub operations.
   - inspect a GitHub Actions run
   - distinguish green, in-progress, infra, deterministic, and blocked outcomes
   - rerun infra flakes or patch deterministic failures
+- `ci-watch-babysit`
+  - watch a GitHub Actions run over time
+  - wait durably with backoff between inspections
+  - rerun infra flakes or patch deterministic failures until the run turns green or blocked
 - `pr-babysit`
   - inspect a pull request
   - summarize checks and actionable review pressure
