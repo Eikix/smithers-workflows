@@ -36,6 +36,22 @@ bun run workflow:list
 bunx smithers-orchestrator up .smithers/workflows/implement-review-fix.tsx
 ```
 
+## Dashboard
+
+Start the local run dashboard:
+
+```bash
+bun run dashboard
+```
+
+Then open:
+
+```text
+http://127.0.0.1:4311
+```
+
+It renders local Smithers runs in progress, current node state, loop iteration, and timer waits by querying the local Smithers CLI.
+
 ## Hooks
 
 This repository uses `prek` with local hooks for:

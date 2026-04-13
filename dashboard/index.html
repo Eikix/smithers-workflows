@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smithers Dashboard</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b1020;
+        --panel: #121931;
+        --panel-2: #1a2343;
+        --text: #eef2ff;
+        --muted: #9aa5ce;
+        --green: #3ddc97;
+        --yellow: #ffd166;
+        --red: #ff6b6b;
+        --blue: #6ea8fe;
+        --border: rgba(255, 255, 255, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+        background:
+          radial-gradient(
+            circle at top,
+            rgba(110, 168, 254, 0.14),
+            transparent 35%
+          ),
+          linear-gradient(180deg, #0b1020, #060913);
+        color: var(--text);
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 380px 1fr;
+        min-height: 100vh;
+      }
+
+      .sidebar,
+      .main {
+        padding: 20px;
+      }
+
+      .sidebar {
+        border-right: 1px solid var(--border);
+        background: rgba(10, 14, 28, 0.72);
+        backdrop-filter: blur(10px);
+      }
+
+      .main {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      .subtle {
+        color: var(--muted);
+      }
+
+      .toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 16px;
+      }
+
+      .run-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .run-card,
+      .panel {
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.03),
+          rgba(255, 255, 255, 0.01)
+        );
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 14px;
+      }
+
+      .run-card {
+        cursor: pointer;
+      }
+
+      .run-card.active {
+        border-color: rgba(110, 168, 254, 0.5);
+        box-shadow: 0 0 0 1px rgba(110, 168, 254, 0.24);
+      }
+
+      .row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .chip {
+        border-radius: 999px;
+        padding: 3px 10px;
+        font-size: 12px;
+        border: 1px solid var(--border);
+        color: var(--text);
+      }
+
+      .status-running,
+      .status-waiting-timer,
+      .status-waiting-event,
+      .status-waiting-approval {
+        background: rgba(110, 168, 254, 0.15);
+        color: var(--blue);
+      }
+
+      .status-finished {
+        background: rgba(61, 220, 151, 0.12);
+        color: var(--green);
+      }
+
+      .status-failed,
+      .status-cancelled,
+      .status-blocked {
+        background: rgba(255, 107, 107, 0.12);
+        color: var(--red);
+      }
+
+      .status-continued,
+      .status-unknown {
+        background: rgba(255, 209, 102, 0.12);
+        color: var(--yellow);
+      }
+
+      .graph {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .node {
+        min-width: 160px;
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: var(--panel);
+      }
+
+      .node.pending {
+        opacity: 0.68;
+      }
+
+      .node.in-progress,
+      .node.waiting-timer,
+      .node.waiting-event,
+      .node.waiting-approval {
+        border-color: rgba(110, 168, 254, 0.5);
+        background: var(--panel-2);
+      }
+
+      .node.finished {
+        border-color: rgba(61, 220, 151, 0.35);
+      }
+
+      .node.failed,
+      .node.cancelled {
+        border-color: rgba(255, 107, 107, 0.4);
+      }
+
+      .kv {
+        display: grid;
+        grid-template-columns: 180px 1fr;
+        gap: 8px 14px;
+      }
+
+      .kv dt {
+        color: var(--muted);
+      }
+
+      .empty {
+        padding: 24px;
+        text-align: center;
+        color: var(--muted);
+      }
+
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font: inherit;
+      }
+
+      @media (max-width: 980px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          border-right: 0;
+          border-bottom: 1px solid var(--border);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="toolbar">
+          <div>
+            <h1>Smithers Runs</h1>
+            <p class="subtle">Live local control plane</p>
+          </div>
+          <div class="subtle" id="updatedAt">loading</div>
+        </div>
+        <div class="run-list" id="runList"></div>
+      </aside>
+      <main class="main">
+        <div class="panel stack">
+          <div class="row">
+            <div>
+              <h2 id="runTitle">No run selected</h2>
+              <p class="subtle" id="runMeta"></p>
+            </div>
+            <div class="chips" id="topChips"></div>
+          </div>
+        </div>
+
+        <div class="panel stack">
+          <h3>Execution Graph</h3>
+          <div class="graph" id="graph"></div>
+        </div>
+
+        <div class="panel stack">
+          <h3>Loop and Timer State</h3>
+          <dl class="kv" id="loopTimer"></dl>
+        </div>
+
+        <div class="panel stack">
+          <h3>Why It Is Blocked</h3>
+          <pre id="why"></pre>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      const state = { runs: [], selectedRunId: null };
+
+      const el = {
+        updatedAt: document.getElementById("updatedAt"),
+        runList: document.getElementById("runList"),
+        runTitle: document.getElementById("runTitle"),
+        runMeta: document.getElementById("runMeta"),
+        topChips: document.getElementById("topChips"),
+        graph: document.getElementById("graph"),
+        loopTimer: document.getElementById("loopTimer"),
+        why: document.getElementById("why"),
+      };
+
+      function statusClass(status) {
+        return `status-${String(status || "unknown")}`;
+      }
+
+      function fmtTime(value) {
+        return value ? new Date(value).toLocaleTimeString() : "—";
+      }
+
+      function renderRuns() {
+        el.runList.innerHTML = "";
+        if (state.runs.length === 0) {
+          el.runList.innerHTML = `<div class="empty">No runs found</div>`;
+          return;
+        }
+
+        for (const run of state.runs) {
+          const card = document.createElement("button");
+          card.className = `run-card stack ${state.selectedRunId === run.id ? "active" : ""}`;
+          card.type = "button";
+          card.innerHTML = `
+            <div class="row">
+              <strong>${run.workflow}</strong>
+              <span class="chip ${statusClass(run.status)}">${run.status}</span>
+            </div>
+            <div class="subtle">${run.id}</div>
+            <div class="row">
+              <span>${run.step || "—"}</span>
+              <span class="subtle">${run.started || ""}</span>
+            </div>
+          `;
+          card.onclick = () => {
+            state.selectedRunId = run.id;
+            renderRuns();
+            fetchRun(run.id);
+          };
+          el.runList.appendChild(card);
+        }
+      }
+
+      function renderDetails(data) {
+        const inspect = data.inspect || {};
+        const why = data.why || {};
+        const run = inspect.run || {};
+        const steps = inspect.steps || [];
+        const loops = inspect.loops || [];
+        const timers = inspect.timers || [];
+
+        el.runTitle.textContent = `${run.workflow || "workflow"} · ${run.id || ""}`;
+        el.runMeta.textContent = `status ${run.status || "unknown"} · started ${fmtTime(run.started)} · elapsed ${run.elapsed || "—"}`;
+        el.topChips.innerHTML = `
+          <span class="chip ${statusClass(run.status)}">${run.status || "unknown"}</span>
+          ${loops[0] ? `<span class="chip">loop ${loops[0].loopId} · iteration ${loops[0].iteration}</span>` : ""}
+          ${timers[0] ? `<span class="chip">timer ${timers[0].remaining || "waiting"}</span>` : ""}
+        `;
+
+        el.graph.innerHTML = steps.length
+          ? steps
+              .map(
+                (step) => `
+              <div class="node ${step.state}">
+                <div class="row">
+                  <strong>${step.label || step.id}</strong>
+                  <span class="chip ${statusClass(step.state)}">${step.state}</span>
+                </div>
+                <div class="subtle">id ${step.id}</div>
+                <div class="subtle">attempt ${step.attempt}</div>
+              </div>
+            `,
+              )
+              .join("")
+          : `<div class="empty">No steps available</div>`;
+
+        const timer = timers[0];
+        const loop = loops[0];
+        const blocker = (why.blockers || [])[0];
+        el.loopTimer.innerHTML = `
+          <dt>Loop</dt><dd>${loop ? `${loop.loopId} · iteration ${loop.iteration}` : "—"}</dd>
+          <dt>Timer</dt><dd>${timer ? `${timer.timerId} · fires ${fmtTime(timer.firesAt)} · ${timer.remaining}` : "—"}</dd>
+          <dt>Current node</dt><dd>${why.currentNodeId || "—"}</dd>
+          <dt>Blocker</dt><dd>${blocker ? blocker.reason : "—"}</dd>
+        `;
+
+        el.why.textContent = blocker
+          ? `${why.summary}\n\n${blocker.context || blocker.reason}`
+          : why.summary || "No blocker summary available.";
+      }
+
+      async function fetchRuns() {
+        const res = await fetch("/api/runs");
+        const data = await res.json();
+        el.updatedAt.textContent = data.now
+          ? `updated ${fmtTime(data.now)}`
+          : "update failed";
+        state.runs = data.runs || [];
+        if (
+          !state.selectedRunId ||
+          !state.runs.some((run) => run.id === state.selectedRunId)
+        ) {
+          state.selectedRunId = state.runs[0]?.id || null;
+        }
+        renderRuns();
+        if (state.selectedRunId) {
+          fetchRun(state.selectedRunId);
+        }
+      }
+
+      async function fetchRun(runId) {
+        const res = await fetch(`/api/run/${encodeURIComponent(runId)}`);
+        const data = await res.json();
+        if (data.error) {
+          el.runTitle.textContent = "Run load failed";
+          el.runMeta.textContent = runId;
+          el.topChips.innerHTML = "";
+          el.graph.innerHTML = `<div class="empty">${data.error}</div>`;
+          el.loopTimer.innerHTML = "";
+          el.why.textContent = data.error;
+          return;
+        }
+        renderDetails(data);
+      }
+
+      fetchRuns();
+      setInterval(fetchRuns, 5000);
+    </script>
+  </body>
+</html>

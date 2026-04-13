@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dashboard": "bun run dashboard/server.ts",
     "format": "prettier --write .",
     "lint": "oxlint .",
     "typecheck": "tsc --noEmit",
