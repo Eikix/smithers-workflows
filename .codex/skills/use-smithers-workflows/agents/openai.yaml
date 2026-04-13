@@ -1,0 +1,3 @@
+display_name: Smithers Workflows
+short_description: Use and evolve the workflow library in this repository.
+default_prompt: Use the existing Smithers workflows in this repository, derive from the nearest current workflow, keep the library lean, and validate changes with the configured repo checks.
