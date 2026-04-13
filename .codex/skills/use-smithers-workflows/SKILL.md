@@ -88,6 +88,34 @@ bunx smithers-orchestrator up .smithers/workflows/ci-babysit.tsx --input '{"repo
 bunx smithers-orchestrator up .smithers/workflows/pr-babysit.tsx --input '{"repo":"owner/name","pr":"42"}'
 ```
 
+## Local dashboard
+
+When a workflow is launched for monitoring, babysitting, or any long-running task, also make the local dashboard available unless it is clearly unnecessary.
+
+- Start the dashboard with:
+
+```bash
+bun run dashboard
+```
+
+- Tell the user to open:
+
+```text
+http://127.0.0.1:4311
+```
+
+- Make it explicit which local runtime the UI is serving:
+  - workspace/worktree root
+  - local `smithers.db` path
+
+Use the dashboard especially for:
+
+- `ci-watch-babysit`
+- `ci-babysit` when the user wants live supervision
+- `pr-babysit` when the user wants live supervision
+
+Do not make the user ask separately for visibility if the task is inherently ongoing. Start the UI path proactively and report the localhost URL.
+
 ## Validation
 
 Run these after changing the library:

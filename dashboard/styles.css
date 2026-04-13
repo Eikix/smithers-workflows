@@ -77,6 +77,10 @@ select {
   margin-bottom: 1rem;
 }
 
+.workspace-panel {
+  margin-bottom: 1rem;
+}
+
 .run-list,
 .main,
 .overview-grid {
@@ -123,6 +127,20 @@ select {
 .run-id,
 .step-type {
   color: var(--muted);
+}
+
+.workspace-label {
+  margin-top: 0.35rem;
+  font-size: 0.94rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.workspace-path {
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  word-break: break-all;
 }
 
 .eyebrow {

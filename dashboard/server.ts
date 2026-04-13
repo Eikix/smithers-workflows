@@ -1,5 +1,5 @@
 import { mkdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 const root = import.meta.dir;
 const indexPath = join(root, "index.html");
@@ -7,6 +7,9 @@ const clientEntry = join(root, "client.tsx");
 const buildDir = join(root, ".build");
 const clientPath = join(buildDir, "client.js");
 const stylesPath = join(root, "styles.css");
+const workspaceRoot = process.cwd();
+const workspaceName = basename(workspaceRoot);
+const databasePath = join(workspaceRoot, "smithers.db");
 const smithersBin = join(process.cwd(), "node_modules", ".bin", "smithers");
 
 type Json = Record<string, unknown>;
@@ -129,7 +132,15 @@ const server = Bun.serve({
           ...run,
           isActive: activeStatus(String(run.status ?? "")),
         }));
-        return json({ runs: items, now: new Date().toISOString() });
+        return json({
+          runs: items,
+          workspace: {
+            name: workspaceName,
+            root: workspaceRoot,
+            databasePath,
+          },
+          now: new Date().toISOString(),
+        });
       } catch (error) {
         return errorResponse(error);
       }

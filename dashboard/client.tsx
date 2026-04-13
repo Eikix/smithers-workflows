@@ -13,6 +13,11 @@ type Run = {
 
 type RunsResponse = {
   runs?: Run[];
+  workspace?: {
+    name?: string;
+    root?: string;
+    databasePath?: string;
+  };
   now?: string;
 };
 
@@ -90,6 +95,9 @@ function App() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string>("");
   const [detail, setDetail] = useState<InspectResponse | null>(null);
+  const [workspace, setWorkspace] = useState<RunsResponse["workspace"] | null>(
+    null,
+  );
   const [updatedAt, setUpdatedAt] = useState("loading");
   const [error, setError] = useState("");
 
@@ -103,6 +111,7 @@ function App() {
         startTransition(() => {
           const nextRuns = data.runs ?? [];
           setRuns(nextRuns);
+          setWorkspace(data.workspace ?? null);
           setUpdatedAt(data.now ?? new Date().toISOString());
           setSelectedRunId((current) => {
             if (current && nextRuns.some((run) => run.id === current)) {
@@ -181,8 +190,19 @@ function App() {
           <div>
             <p className="eyebrow">Runtime</p>
             <h1>Smithers runs</h1>
+            <p className="workspace-label">
+              {workspace?.name ?? "unknown workspace"}
+            </p>
           </div>
           <p className="meta-text">{updatedAt}</p>
+        </div>
+
+        <div className="panel workspace-panel">
+          <p className="eyebrow">Serving from</p>
+          <p className="workspace-path">{workspace?.root ?? "loading..."}</p>
+          <p className="meta-text">
+            DB {workspace?.databasePath ?? "loading..."}
+          </p>
         </div>
 
         {error ? <div className="notice notice-bad">{error}</div> : null}
