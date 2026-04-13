@@ -5,6 +5,8 @@
     "": {
       "name": "smithers-workflows",
       "dependencies": {
+        "react": "^19.2.0",
+        "react-dom": "^19.2.0",
         "smithers-orchestrator": "latest",
         "zod": "^4.3.6",
       },

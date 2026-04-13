@@ -5,6 +5,10 @@ sandboxes/
 state/
 tmp/
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 dist/
 .DS_Store
+dashboard/.build/
+.smithers/workflows/*.log

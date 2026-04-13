@@ -1,8 +1,12 @@
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const root = import.meta.dir;
 const indexPath = join(root, "index.html");
+const clientEntry = join(root, "client.tsx");
+const buildDir = join(root, ".build");
+const clientPath = join(buildDir, "client.js");
+const stylesPath = join(root, "styles.css");
 const smithersBin = join(process.cwd(), "node_modules", ".bin", "smithers");
 
 type Json = Record<string, unknown>;
@@ -69,6 +73,27 @@ function activeStatus(status: string) {
   ].includes(status);
 }
 
+async function buildDashboardBundle() {
+  await mkdir(buildDir, { recursive: true });
+  const result = await Bun.build({
+    entrypoints: [clientEntry],
+    outdir: buildDir,
+    naming: "client.js",
+    minify: false,
+    target: "browser",
+    format: "esm",
+  });
+
+  if (!result.success) {
+    throw new Error(
+      result.logs.map((log) => log.message).join("\n") ||
+        "Failed to build dashboard client",
+    );
+  }
+}
+
+const dashboardBundle = buildDashboardBundle();
+
 const server = Bun.serve({
   port: Number(process.env.PORT || 4311),
   idleTimeout: 30,
@@ -76,8 +101,22 @@ const server = Bun.serve({
     const url = new URL(req.url);
 
     if (url.pathname === "/") {
+      await dashboardBundle;
       return new Response(await readFile(indexPath), {
         headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    }
+
+    if (url.pathname === "/assets/client.js") {
+      await dashboardBundle;
+      return new Response(await readFile(clientPath), {
+        headers: { "content-type": "text/javascript; charset=utf-8" },
+      });
+    }
+
+    if (url.pathname === "/assets/styles.css") {
+      return new Response(await readFile(stylesPath), {
+        headers: { "content-type": "text/css; charset=utf-8" },
       });
     }
 
