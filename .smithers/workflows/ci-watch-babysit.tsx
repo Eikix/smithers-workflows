@@ -66,11 +66,13 @@ export default smithers((ctx) => {
   const repo = String(ctx.input.repo ?? "");
   const inspection = ctx.latest("inspection", "inspect");
   const classification = inspection?.classification ?? "unknown";
+  const hasInspection = !!inspection;
   const waitDuration = backoffForIteration(ctx.iteration);
   const done =
-    classification === "green" ||
-    classification === "blocked" ||
-    classification === "unknown";
+    hasInspection &&
+    (classification === "green" ||
+      classification === "blocked" ||
+      classification === "unknown");
 
   return (
     <Workflow name="ci-watch-babysit">
