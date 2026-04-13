@@ -1,0 +1,24 @@
+# Fix CI Failure
+
+The failing run has been classified as deterministic.
+
+Repository:
+{props.repo}
+
+Run:
+{props.run}
+
+Inspection summary:
+{props.summary}
+
+Fix the active blocker with minimal, high-confidence changes.
+
+Rules:
+
+- patch only the active failure mode
+- avoid broad refactors
+- avoid timeout inflation unless the evidence directly justifies it
+- validate locally when practical before requesting a rerun
+
+REQUIRED OUTPUT:
+{props.schema}

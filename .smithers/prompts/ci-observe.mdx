@@ -1,0 +1,20 @@
+# Inspect GitHub Actions Run
+
+Inspect the GitHub Actions run identified by:
+
+- run: {props.run}
+- repository: {props.repo}
+
+Use `gh` to determine:
+
+- run status
+- run conclusion if terminal
+- failed jobs if any
+- whether the failure is best classified as `green`, `running`, `infra`, `deterministic`, `blocked`, or `unknown`
+
+Classify `infra` only for setup or environment failures such as runner package locks, network fetch failures, auth issues outside branch code, or obvious transient GitHub/runtime issues.
+
+Classify `deterministic` only when the branch code or workflow logic is the active blocker.
+
+REQUIRED OUTPUT:
+{props.schema}

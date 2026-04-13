@@ -1,0 +1,22 @@
+# Fix Pull Request
+
+Repository:
+{props.repo}
+
+PR:
+{props.pr}
+
+Inspection summary:
+{props.summary}
+
+Address only the actionable deterministic issues.
+
+Rules:
+
+- keep the change lean
+- do not widen scope
+- prefer the minimal fix that resolves the active blocker
+- preserve review context and avoid introducing new findings
+
+REQUIRED OUTPUT:
+{props.schema}
