@@ -54,7 +54,8 @@ function queryAllRuns(): RunRow[] {
     const nowMs = Date.now();
     // Exclude orphaned runs:
     // 1. "running" with stale heartbeat — continued-as-new predecessors
-    // 2. "waiting-timer" with no node updates in 30+ min — stuck/abandoned
+    // 2. "waiting-timer" with no node updates in 4h — stuck/abandoned
+    // 3. "running" with 0 nodes after 2+ min alive — empty ghost runs
     return db
       .query(
         `SELECT r.run_id, r.workflow_name, r.workflow_path, r.status,
@@ -72,11 +73,17 @@ function queryAllRuns(): RunRow[] {
            AND (SELECT MAX(n.updated_at_ms) FROM _smithers_nodes n
                 WHERE n.run_id = r.run_id) < ?2
          )
+         AND NOT (
+           r.created_at_ms < ?3
+           AND (SELECT COUNT(*) FROM _smithers_nodes n
+                WHERE n.run_id = r.run_id) = 0
+         )
          ORDER BY r.created_at_ms DESC`,
       )
       .all(
         nowMs - STALE_HEARTBEAT_THRESHOLD_MS,
         nowMs - STALE_TIMER_THRESHOLD_MS,
+        nowMs - 2 * 60 * 1000, // 2 minutes grace for new runs
       ) as RunRow[];
   } finally {
     db.close();
