@@ -817,8 +817,27 @@ function Canvas({
     loops.map((loop) => [loop.loopId, loop.iteration]),
   );
 
+  const blockers = detail.why.blockers ?? [];
+
   return (
     <div className="canvas">
+      {blockers.length > 0 && (
+        <div className="blocker-banner">
+          {blockers.map((b, i) => {
+            const isWarning =
+              b.kind === "stale-heartbeat" || b.kind === "failed";
+            return (
+              <div
+                key={i}
+                className={`blocker-item ${isWarning ? "blocker-warn" : "blocker-info"}`}
+              >
+                <span className="blocker-kind">{b.kind}</span>
+                {b.reason && <span className="blocker-reason">{b.reason}</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
       <div
         className="graph-container"
         style={{ width: layout.width, height: layout.height }}

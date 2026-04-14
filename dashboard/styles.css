@@ -518,6 +518,64 @@ pre {
   color: var(--accent);
 }
 
+/* --- Blocker banner --- */
+
+.blocker-banner {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 500px;
+}
+
+.blocker-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+  font-size: 12px;
+}
+
+.blocker-item.blocker-info {
+  background: rgba(87, 199, 255, 0.06);
+  border: 1px solid rgba(87, 199, 255, 0.2);
+}
+
+.blocker-item.blocker-warn {
+  background: rgba(255, 123, 114, 0.08);
+  border: 1px solid rgba(255, 123, 114, 0.25);
+}
+
+.blocker-kind {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.blocker-info .blocker-kind {
+  color: var(--accent);
+  background: rgba(87, 199, 255, 0.1);
+}
+
+.blocker-warn .blocker-kind {
+  color: var(--bad);
+  background: rgba(255, 123, 114, 0.1);
+}
+
+.blocker-reason {
+  color: var(--muted);
+}
+
 /* --- Error notice --- */
 
 .notice-error {
