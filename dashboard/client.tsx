@@ -716,13 +716,221 @@ function LoopBoundary({
   );
 }
 
-// Components will follow in Task 7.
-// For now, render a placeholder to verify the build works.
+// ---- App ----
+
+function Canvas({
+  detail,
+  graph,
+}: {
+  detail: RunDetailResponse | null;
+  graph: GraphResponse | null;
+}) {
+  const layout = useMemo(() => {
+    if (!graph) return null;
+    return computeLayout(graph);
+  }, [graph]);
+
+  if (!detail || !layout) {
+    return (
+      <div className="canvas">
+        <div className="canvas-empty">
+          Select a run to view its workflow graph.
+        </div>
+      </div>
+    );
+  }
+
+  const steps = detail.inspect.steps ?? [];
+  const loops = detail.inspect.loops ?? [];
+  const loopIterationMap = new Map(
+    loops.map((loop) => [loop.loopId, loop.iteration]),
+  );
+
+  return (
+    <div className="canvas">
+      <div
+        className="graph-container"
+        style={{ width: layout.width + 80, height: layout.height + 80 }}
+      >
+        <WireOverlay layout={layout} steps={steps} />
+
+        {layout.loops.map((loop) => (
+          <LoopBoundary
+            key={loop.id}
+            loop={loop}
+            iteration={loopIterationMap.get(loop.id)}
+          />
+        ))}
+
+        {layout.nodes.map((node) => {
+          const step = steps.find((step) => step.id === node.id);
+          const loopIteration = node.loopId
+            ? loopIterationMap.get(node.loopId)
+            : undefined;
+          const tokenKey = `${node.id}:${loopIteration ?? 0}`;
+          const tokens = detail.tokensByNode[tokenKey];
+          // Find latest agent model for this node
+          const agentKey = Object.keys(detail.agentByNode)
+            .filter((key) => key.startsWith(`${node.id}:`))
+            .sort()
+            .pop();
+          const agentModel = agentKey
+            ? detail.agentByNode[agentKey]
+            : undefined;
+
+          return (
+            <NodeCard
+              key={node.id}
+              node={node}
+              step={step}
+              tokens={tokens}
+              agentModel={agentModel}
+              loopIteration={loopIteration}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function App() {
+  const [repos, setRepos] = useState<RepoGroup[]>([]);
+  const [selectedRunId, setSelectedRunId] = useState("");
+  const [selectedWorkflowPath, setSelectedWorkflowPath] = useState<
+    string | null
+  >(null);
+  const [detail, setDetail] = useState<RunDetailResponse | null>(null);
+  const [graph, setGraph] = useState<GraphResponse | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [error, setError] = useState("");
+
+  // Poll runs list
+  useEffect(() => {
+    let alive = true;
+
+    const loadRuns = async () => {
+      try {
+        const data = await fetchJson<RunsResponse>("/api/runs");
+        if (!alive) return;
+        startTransition(() => {
+          setRepos(data.repos);
+          setError("");
+          // Auto-select first run if none selected
+          setSelectedRunId((current) => {
+            const allRuns = data.repos.flatMap((repo) => repo.runs);
+            if (current && allRuns.some((run) => run.id === current))
+              return current;
+            return allRuns[0]?.id ?? "";
+          });
+        });
+      } catch (nextError) {
+        if (!alive) return;
+        setError(
+          nextError instanceof Error ? nextError.message : String(nextError),
+        );
+      }
+    };
+
+    void loadRuns();
+    const timer = setInterval(() => void loadRuns(), POLL_INTERVAL_MS);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, []);
+
+  // Track selected workflow path when run changes
+  useEffect(() => {
+    const allRuns = repos.flatMap((repo) => repo.runs);
+    const selectedRun = allRuns.find((run) => run.id === selectedRunId);
+    setSelectedWorkflowPath(selectedRun?.workflowPath ?? null);
+  }, [selectedRunId, repos]);
+
+  // Poll run detail
+  useEffect(() => {
+    if (!selectedRunId) {
+      setDetail(null);
+      return;
+    }
+
+    let alive = true;
+
+    const loadDetail = async () => {
+      try {
+        const data = await fetchJson<RunDetailResponse>(
+          `/api/run/${encodeURIComponent(selectedRunId)}`,
+        );
+        if (!alive) return;
+        startTransition(() => {
+          setDetail(data);
+          setError("");
+        });
+      } catch (nextError) {
+        if (!alive) return;
+        setError(
+          nextError instanceof Error ? nextError.message : String(nextError),
+        );
+      }
+    };
+
+    void loadDetail();
+    const timer = setInterval(() => void loadDetail(), POLL_INTERVAL_MS);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [selectedRunId]);
+
+  // Fetch graph topology (once per workflow, cached server-side)
+  useEffect(() => {
+    if (!selectedWorkflowPath) {
+      setGraph(null);
+      return;
+    }
+
+    let alive = true;
+
+    const loadGraph = async () => {
+      try {
+        const data = await fetchJson<GraphResponse>(
+          `/api/graph/${encodeURIComponent(selectedWorkflowPath)}`,
+        );
+        if (!alive) return;
+        startTransition(() => setGraph(data));
+      } catch (nextError) {
+        if (!alive) return;
+        setError(
+          nextError instanceof Error ? nextError.message : String(nextError),
+        );
+      }
+    };
+
+    void loadGraph();
+    return () => {
+      alive = false;
+    };
+  }, [selectedWorkflowPath]);
+
+  const handleSelectRun = useCallback((id: string) => {
+    setSelectedRunId(id);
+  }, []);
+
+  const handleToggleCollapse = useCallback(() => {
+    setSidebarCollapsed((current) => !current);
+  }, []);
+
   return (
     <div className="app-shell">
-      <div className="canvas-empty">Dashboard loading...</div>
+      <Sidebar
+        repos={repos}
+        selectedRunId={selectedRunId}
+        onSelectRun={handleSelectRun}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={handleToggleCollapse}
+      />
+      {error ? <div className="notice-error">{error}</div> : null}
+      <Canvas detail={detail} graph={graph} />
     </div>
   );
 }
