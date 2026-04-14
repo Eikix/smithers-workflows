@@ -306,6 +306,9 @@ pre {
   background-color: var(--bg);
   background-image: radial-gradient(#ffffff08 1px, transparent 1px);
   background-size: 20px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .canvas-empty {
@@ -335,7 +338,7 @@ pre {
 
 .wire {
   fill: none;
-  stroke-width: 2;
+  stroke-width: 2.5;
 }
 
 .wire-pending {

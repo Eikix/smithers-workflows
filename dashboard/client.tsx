@@ -346,9 +346,60 @@ function buildEdgesFromXml(xml: XmlNode): LayoutEdge[] {
   return edges;
 }
 
-function computeLayout(graph: GraphResponse): LayoutResult {
+function computeLayout(
+  graph: GraphResponse,
+  steps?: Step[],
+  timers?: TimerState[],
+  loops?: LoopState[],
+): LayoutResult {
   const xmlNodes = extractNodesFromXml(graph.xml);
   const edges = buildEdgesFromXml(graph.xml);
+
+  // Synthesize nodes for steps that exist in inspect but not in the graph XML.
+  // This surfaces implicit nodes like ralph loop timers (e.g. "backoff").
+  if (steps) {
+    const knownIds = new Set(xmlNodes.map((n) => n.id));
+    const seenSynthetic = new Set<string>();
+
+    // Build a set of loop IDs and their first node for edge insertion
+    const loopFirstNode = new Map<string, string>();
+    for (const node of xmlNodes) {
+      if (node.loopId && !loopFirstNode.has(node.loopId)) {
+        loopFirstNode.set(node.loopId, node.id);
+      }
+    }
+
+    for (const step of steps) {
+      if (knownIds.has(step.id) || seenSynthetic.has(step.id)) continue;
+      seenSynthetic.add(step.id);
+
+      // Determine type from step label or timer data
+      const isTimer =
+        step.label?.startsWith("timer:") ||
+        timers?.some((t) => t.timerId === step.id);
+      const type: LayoutNode["type"] = isTimer ? "timer" : "task";
+
+      // Determine loop membership: check if this step's timer belongs to a loop
+      let loopId: string | undefined;
+      if (loops && loops.length > 0) {
+        // Ralph loop timers appear as steps — assign to the loop
+        // Heuristic: if there's exactly one loop, timer belongs to it
+        if (loops.length === 1) {
+          loopId = loops[0].loopId;
+        }
+      }
+
+      xmlNodes.unshift({ id: step.id, type, label: step.id, loopId });
+
+      // Add edge: timer → first node in its loop
+      if (loopId) {
+        const firstInLoop = loopFirstNode.get(loopId);
+        if (firstInLoop) {
+          edges.unshift({ sourceId: step.id, targetId: firstInLoop });
+        }
+      }
+    }
+  }
 
   // Build adjacency for topological positioning
   const nodeMap = new Map(xmlNodes.map((node) => [node.id, node]));
@@ -727,7 +778,7 @@ function LoopBoundary({
       }}
     >
       <span className="loop-label">
-        {loop.label}
+        {loop.label} loop
         {iteration != null ? ` · iter ${iteration}` : ""}
       </span>
     </div>
@@ -743,10 +794,14 @@ function Canvas({
   detail: RunDetailResponse | null;
   graph: GraphResponse | null;
 }) {
+  const steps = detail?.inspect.steps ?? [];
+  const timers = detail?.inspect.timers ?? [];
+  const loops = detail?.inspect.loops ?? [];
+
   const layout = useMemo(() => {
     if (!graph) return null;
-    return computeLayout(graph);
-  }, [graph]);
+    return computeLayout(graph, steps, timers, loops);
+  }, [graph, steps, timers, loops]);
 
   if (!detail || !layout) {
     return (
@@ -758,8 +813,6 @@ function Canvas({
     );
   }
 
-  const steps = detail.inspect.steps ?? [];
-  const loops = detail.inspect.loops ?? [];
   const loopIterationMap = new Map(
     loops.map((loop) => [loop.loopId, loop.iteration]),
   );
