@@ -445,6 +445,32 @@ pre {
   margin-bottom: 2px;
 }
 
+.node-timer-line {
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+.timer-countdown {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.timer-due {
+  color: var(--accent);
+  font-weight: 600;
+  animation: timer-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes timer-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
 .node-detail-line {
   font-size: 10px;
   color: var(--muted);

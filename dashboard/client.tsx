@@ -637,18 +637,29 @@ function Sidebar({
 
 // ---- Canvas components ----
 
+function formatTimerRemaining(timer: TimerState): string {
+  if (!timer.firesAt) return timer.remaining ?? "";
+  const firesAtMs = new Date(timer.firesAt).getTime();
+  const nowMs = Date.now();
+  const diffMs = firesAtMs - nowMs;
+  if (diffMs <= 0) return "due now";
+  return formatDuration(diffMs);
+}
+
 function NodeCard({
   node,
   step,
   tokens,
   agentModel,
   loopIteration,
+  timer,
 }: {
   node: LayoutNode;
   step?: Step;
   tokens?: { input: number; output: number; cacheRead: number; total: number };
   agentModel?: string;
   loopIteration?: number;
+  timer?: TimerState;
 }) {
   const state = nodeStateFromStep(step);
   const barClass =
@@ -659,6 +670,19 @@ function NodeCard({
         : state === "pending"
           ? "pending"
           : node.type;
+
+  // Live countdown for timers
+  const [timerDisplay, setTimerDisplay] = useState(() =>
+    timer ? formatTimerRemaining(timer) : "",
+  );
+
+  useEffect(() => {
+    if (!timer?.firesAt) return;
+    const update = () => setTimerDisplay(formatTimerRemaining(timer));
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [timer]);
 
   return (
     <div className={`node-card ${state}`} style={{ left: node.x, top: node.y }}>
@@ -672,6 +696,15 @@ function NodeCard({
             ? ` · attempt ${step.attempt}`
             : ""}
         </div>
+        {timer && state === "waiting" ? (
+          <div className="node-timer-line">
+            {timerDisplay === "due now" ? (
+              <span className="timer-due">fires any moment</span>
+            ) : (
+              <span className="timer-countdown">{timerDisplay} remaining</span>
+            )}
+          </div>
+        ) : null}
         {tokens || agentModel ? (
           <div className="node-detail-line">
             {agentModel ? shortenModelName(agentModel) : ""}
@@ -886,6 +919,8 @@ function Canvas({
             ? detail.agentByNode[agentKey]
             : undefined;
 
+          const timer = timers.find((t) => t.timerId === node.id);
+
           return (
             <NodeCard
               key={node.id}
@@ -894,6 +929,7 @@ function Canvas({
               tokens={tokens}
               agentModel={agentModel}
               loopIteration={loopIteration}
+              timer={timer}
             />
           );
         })}
