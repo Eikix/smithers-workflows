@@ -138,6 +138,7 @@ const NODE_HEIGHT = 120;
 const GAP_X = 80;
 const GAP_Y = 60;
 const LOOP_PADDING = 24;
+const GRAPH_MARGIN = 40;
 const POLL_INTERVAL_MS = 5000;
 
 // ---- Fetch helpers ----
@@ -410,8 +411,8 @@ function computeLayout(graph: GraphResponse): LayoutResult {
         id,
         type: xmlNode.type,
         label: xmlNode.label,
-        x: col * (NODE_WIDTH + GAP_X),
-        y: row * (NODE_HEIGHT + GAP_Y),
+        x: col * (NODE_WIDTH + GAP_X) + GRAPH_MARGIN,
+        y: row * (NODE_HEIGHT + GAP_Y) + GRAPH_MARGIN,
         loopId: xmlNode.loopId,
         parentIds: incomingEdges.map((edge) => edge.sourceId),
         childIds: outgoingEdges.map((edge) => edge.targetId),
@@ -444,8 +445,10 @@ function computeLayout(graph: GraphResponse): LayoutResult {
     });
   }
 
-  const totalWidth = (maxCol + 1) * (NODE_WIDTH + GAP_X) - GAP_X;
-  const totalHeight = (maxRow + 1) * (NODE_HEIGHT + GAP_Y) - GAP_Y;
+  const totalWidth =
+    (maxCol + 1) * (NODE_WIDTH + GAP_X) - GAP_X + GRAPH_MARGIN * 2;
+  const totalHeight =
+    (maxRow + 1) * (NODE_HEIGHT + GAP_Y) - GAP_Y + GRAPH_MARGIN * 2;
 
   return {
     nodes: layoutNodes,
@@ -765,7 +768,7 @@ function Canvas({
     <div className="canvas">
       <div
         className="graph-container"
-        style={{ width: layout.width + 80, height: layout.height + 80 }}
+        style={{ width: layout.width, height: layout.height }}
       >
         <WireOverlay layout={layout} steps={steps} />
 

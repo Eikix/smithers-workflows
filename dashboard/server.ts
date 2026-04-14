@@ -117,7 +117,9 @@ function groupRunsByRepo(rows: RunRow[], nowMs: number) {
       workflowPath: row.workflow_path,
       status: row.status,
       startedAtMs: row.started_at_ms,
-      elapsedMs: row.started_at_ms ? nowMs - row.started_at_ms : null,
+      elapsedMs: row.started_at_ms
+        ? (row.finished_at_ms ?? nowMs) - row.started_at_ms
+        : null,
       finishedAtMs: row.finished_at_ms,
     });
   }

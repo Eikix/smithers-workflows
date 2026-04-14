@@ -319,7 +319,6 @@ pre {
 
 .graph-container {
   position: relative;
-  padding: 40px;
   min-width: fit-content;
   min-height: fit-content;
 }
