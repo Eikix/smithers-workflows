@@ -461,6 +461,11 @@ pre {
   animation: timer-pulse 1.5s ease-in-out infinite;
 }
 
+.timer-overdue {
+  color: var(--bad);
+  font-weight: 600;
+}
+
 @keyframes timer-pulse {
   0%,
   100% {

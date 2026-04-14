@@ -637,13 +637,22 @@ function Sidebar({
 
 // ---- Canvas components ----
 
-function formatTimerRemaining(timer: TimerState): string {
-  if (!timer.firesAt) return timer.remaining ?? "";
+function formatTimerStatus(timer: TimerState): {
+  text: string;
+  tone: "countdown" | "due" | "overdue";
+} {
+  if (!timer.firesAt) return { text: timer.remaining ?? "", tone: "due" };
   const firesAtMs = new Date(timer.firesAt).getTime();
   const nowMs = Date.now();
   const diffMs = firesAtMs - nowMs;
-  if (diffMs <= 0) return "due now";
-  return formatDuration(diffMs);
+  if (diffMs > 0) {
+    return { text: `${formatDuration(diffMs)} remaining`, tone: "countdown" };
+  }
+  const overdueMs = -diffMs;
+  if (overdueMs < 2 * 60 * 1000) {
+    return { text: "fires any moment", tone: "due" };
+  }
+  return { text: `overdue ${formatDuration(overdueMs)}`, tone: "overdue" };
 }
 
 function NodeCard({
@@ -672,13 +681,13 @@ function NodeCard({
           : node.type;
 
   // Live countdown for timers
-  const [timerDisplay, setTimerDisplay] = useState(() =>
-    timer ? formatTimerRemaining(timer) : "",
+  const [timerStatus, setTimerStatus] = useState(() =>
+    timer ? formatTimerStatus(timer) : null,
   );
 
   useEffect(() => {
     if (!timer?.firesAt) return;
-    const update = () => setTimerDisplay(formatTimerRemaining(timer));
+    const update = () => setTimerStatus(formatTimerStatus(timer));
     update();
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
@@ -696,13 +705,11 @@ function NodeCard({
             ? ` · attempt ${step.attempt}`
             : ""}
         </div>
-        {timer && state === "waiting" ? (
+        {timerStatus && state === "waiting" ? (
           <div className="node-timer-line">
-            {timerDisplay === "due now" ? (
-              <span className="timer-due">fires any moment</span>
-            ) : (
-              <span className="timer-countdown">{timerDisplay} remaining</span>
-            )}
+            <span className={`timer-${timerStatus.tone}`}>
+              {timerStatus.text}
+            </span>
           </div>
         ) : null}
         {tokens || agentModel ? (
