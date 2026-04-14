@@ -44,17 +44,27 @@ type AgentModelRow = {
   agent_model: string | null;
 };
 
+const STALE_HEARTBEAT_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+
 function queryAllRuns(): RunRow[] {
   const db = openDatabase();
   try {
+    const nowMs = Date.now();
+    // Exclude "running" rows with a stale heartbeat — these are
+    // continued-as-new predecessors that smithers never marked finished.
     return db
       .query(
         `SELECT run_id, workflow_name, workflow_path, status, vcs_root,
                 created_at_ms, started_at_ms, finished_at_ms
          FROM _smithers_runs
+         WHERE NOT (
+           status = 'running'
+           AND heartbeat_at_ms IS NOT NULL
+           AND heartbeat_at_ms < ?
+         )
          ORDER BY created_at_ms DESC`,
       )
-      .all() as RunRow[];
+      .all(nowMs - STALE_HEARTBEAT_THRESHOLD_MS) as RunRow[];
   } finally {
     db.close();
   }
