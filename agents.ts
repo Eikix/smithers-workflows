@@ -2,21 +2,17 @@
 import {
   ClaudeCodeAgent,
   CodexAgent,
-  PiAgent,
-  AmpAgent,
   type AgentLike,
 } from "smithers-orchestrator";
 
 export const providers = {
-  claude: new ClaudeCodeAgent({ model: "claude-opus-4-6" }),
-  codex: new CodexAgent({ model: "gpt-5.3-codex", skipGitRepoCheck: true }),
-  pi: new PiAgent({ provider: "openai", model: "gpt-5.3-codex" }),
-  amp: new AmpAgent(),
+  claudeOpus: new ClaudeCodeAgent({ model: "claude-opus-4-6" }),
   claudeSonnet: new ClaudeCodeAgent({ model: "claude-sonnet-4-6" }),
+  codex: new CodexAgent({ model: "gpt-5.4", skipGitRepoCheck: true }),
 } as const;
 
 export const agents = {
-  cheapFast: [providers.claudeSonnet, providers.pi],
-  smart: [providers.codex, providers.claude, providers.amp],
-  smartTool: [providers.claude, providers.codex, providers.amp],
+  cheapFast: [providers.claudeSonnet],
+  smart: [providers.codex, providers.claudeOpus],
+  smartTool: [providers.claudeOpus, providers.codex],
 } as const satisfies Record<string, AgentLike[]>;
