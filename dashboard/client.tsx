@@ -452,7 +452,114 @@ function computeLayout(graph: GraphResponse): LayoutResult {
   };
 }
 
-// Components will follow in Tasks 5-7.
+// ---- Sidebar ----
+
+function Sidebar({
+  repos,
+  selectedRunId,
+  onSelectRun,
+  collapsed,
+  onToggleCollapse,
+}: {
+  repos: RepoGroup[];
+  selectedRunId: string;
+  onSelectRun: (id: string) => void;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+}) {
+  const [hideFinished, setHideFinished] = useState(false);
+
+  const filteredRepos = useMemo(() => {
+    if (!hideFinished) return repos;
+    return repos
+      .map((repo) => ({
+        ...repo,
+        runs: repo.runs.filter(
+          (run) =>
+            !["finished", "completed", "success", "cancelled"].includes(
+              run.status,
+            ),
+        ),
+      }))
+      .filter((repo) => repo.runs.length > 0);
+  }, [repos, hideFinished]);
+
+  return (
+    <aside className={`sidebar${collapsed ? " collapsed" : ""}`}>
+      <div className="sidebar-header">
+        <span className="sidebar-title">Smithers</span>
+        <button
+          className="collapse-button"
+          onClick={onToggleCollapse}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          type="button"
+        >
+          {collapsed ? "→" : "←"}
+        </button>
+      </div>
+
+      <label className="toggle-finished">
+        <input
+          type="checkbox"
+          checked={hideFinished}
+          onChange={(event) => setHideFinished(event.target.checked)}
+        />
+        Hide finished
+      </label>
+
+      <div className="run-list">
+        {filteredRepos.map((repo) => (
+          <div key={repo.path}>
+            <div className="repo-header">
+              <span className="repo-name">{repo.name}</span>
+              <span className="repo-count">
+                {
+                  repo.runs.filter((run) => statusTone(run.status) === "live")
+                    .length
+                }{" "}
+                active
+              </span>
+            </div>
+            {repo.runs.map((run) => (
+              <button
+                key={run.id}
+                className={`run-card${run.id === selectedRunId ? " selected" : ""}`}
+                onClick={() => onSelectRun(run.id)}
+                type="button"
+                title={`${run.workflow} — ${run.status}`}
+              >
+                <div className="run-card-top">
+                  <span className="run-card-workflow">
+                    {collapsed ? null : run.workflow}
+                  </span>
+                  {collapsed ? (
+                    <span className={`status-dot ${statusTone(run.status)}`} />
+                  ) : (
+                    <span className={`pill pill-${statusTone(run.status)}`}>
+                      {run.status}
+                    </span>
+                  )}
+                </div>
+                <div className="run-card-details">
+                  <span className="run-card-meta">
+                    {formatDuration(run.elapsedMs)}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        ))}
+        {filteredRepos.length === 0 ? (
+          <div className="canvas-empty" style={{ padding: "24px 0" }}>
+            No runs to show.
+          </div>
+        ) : null}
+      </div>
+    </aside>
+  );
+}
+
+// Components will follow in Tasks 6-7.
 // For now, render a placeholder to verify the build works.
 
 function App() {
