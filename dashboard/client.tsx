@@ -25,6 +25,7 @@ type RunSummary = {
   elapsedMs: number | null;
   finishedAtMs: number | null;
   input?: Record<string, string>;
+  branch?: string;
 };
 
 type RunsResponse = {
@@ -599,8 +600,13 @@ function Sidebar({
                     </span>
                   )}
                 </div>
-                {run.input?.repo && (
-                  <div className="run-card-subtitle">{run.input.repo}</div>
+                {(run.input?.repo || run.branch) && (
+                  <div className="run-card-subtitle">
+                    {run.input?.repo}
+                    {run.branch && (
+                      <span className="run-card-branch"> / {run.branch}</span>
+                    )}
+                  </div>
                 )}
                 <div className="run-card-details">
                   <span className="run-card-meta">

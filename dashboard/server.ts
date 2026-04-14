@@ -246,6 +246,60 @@ async function getWorkflowGraph(workflowPath: string) {
   return data;
 }
 
+// --- Branch cache (GH run ID → branch, permanent since it never changes) ---
+
+const branchCache = new Map<string, string>();
+const branchPending = new Set<string>();
+
+function resolveBranches(
+  runs: Array<{ input?: Record<string, string>; branch?: string }>,
+) {
+  for (const run of runs) {
+    const repo = run.input?.repo;
+    const ghRunId = run.input?.run;
+    if (!repo || !ghRunId) continue;
+
+    const cacheKey = `${repo}:${ghRunId}`;
+    const cached = branchCache.get(cacheKey);
+    if (cached) {
+      run.branch = cached;
+      continue;
+    }
+
+    // Fetch in background — result shows up on next poll
+    if (!branchPending.has(cacheKey)) {
+      branchPending.add(cacheKey);
+      (async () => {
+        try {
+          const proc = Bun.spawn(
+            [
+              "gh",
+              "run",
+              "view",
+              ghRunId,
+              "--repo",
+              repo,
+              "--json",
+              "headBranch",
+            ],
+            { stdout: "pipe", stderr: "ignore" },
+          );
+          const text = await new Response(proc.stdout).text();
+          await proc.exited;
+          const data = JSON.parse(text);
+          if (data.headBranch) {
+            branchCache.set(cacheKey, data.headBranch);
+          }
+        } catch {
+          // Ignore — will retry on next poll
+        } finally {
+          branchPending.delete(cacheKey);
+        }
+      })();
+    }
+  }
+}
+
 // --- HTTP helpers ---
 
 function jsonResponse(data: unknown, status = 200) {
@@ -314,6 +368,12 @@ const server = Bun.serve({
       try {
         const rows = queryAllRuns();
         const repos = groupRunsByRepo(rows, Date.now());
+        // Resolve GH branches in background — cached results appear on next poll
+        const allRuns = repos.flatMap((r) => r.runs) as Array<{
+          input?: Record<string, string>;
+          branch?: string;
+        }>;
+        resolveBranches(allRuns);
         return jsonResponse({ repos, now: new Date().toISOString() });
       } catch (error) {
         return errorResponse(error);

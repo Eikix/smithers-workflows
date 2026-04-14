@@ -221,6 +221,10 @@ pre {
   text-overflow: ellipsis;
 }
 
+.run-card-branch {
+  color: var(--muted);
+}
+
 .run-card-meta {
   font-size: 11px;
   color: var(--muted);
