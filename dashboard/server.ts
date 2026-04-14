@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { mkdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
@@ -8,16 +9,160 @@ const buildDir = join(root, ".build");
 const clientPath = join(buildDir, "client.js");
 const stylesPath = join(root, "styles.css");
 const workspaceRoot = process.cwd();
-const workspaceName = basename(workspaceRoot);
 const databasePath = join(workspaceRoot, "smithers.db");
-const smithersBin = join(process.cwd(), "node_modules", ".bin", "smithers");
+const smithersBin = join(workspaceRoot, "node_modules", ".bin", "smithers");
+
+// --- Database ---
+
+function openDatabase() {
+  return new Database(databasePath, { readonly: true });
+}
+
+type RunRow = {
+  run_id: string;
+  workflow_name: string;
+  workflow_path: string | null;
+  status: string;
+  vcs_root: string | null;
+  created_at_ms: number;
+  started_at_ms: number | null;
+  finished_at_ms: number | null;
+};
+
+type TokenEventRow = {
+  node_id: string;
+  iteration: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+};
+
+type AgentModelRow = {
+  node_id: string;
+  iteration: number;
+  attempt: number;
+  agent_model: string | null;
+};
+
+function queryAllRuns(): RunRow[] {
+  const db = openDatabase();
+  try {
+    return db
+      .query(
+        `SELECT run_id, workflow_name, workflow_path, status, vcs_root,
+                created_at_ms, started_at_ms, finished_at_ms
+         FROM _smithers_runs
+         ORDER BY created_at_ms DESC`,
+      )
+      .all() as RunRow[];
+  } finally {
+    db.close();
+  }
+}
+
+function queryTokenUsage(runId: string): TokenEventRow[] {
+  const db = openDatabase();
+  try {
+    return db
+      .query(
+        `SELECT
+           json_extract(payload_json, '$.nodeId') as node_id,
+           json_extract(payload_json, '$.iteration') as iteration,
+           SUM(json_extract(payload_json, '$.inputTokens')) as input_tokens,
+           SUM(json_extract(payload_json, '$.outputTokens')) as output_tokens,
+           SUM(json_extract(payload_json, '$.cacheReadTokens')) as cache_read_tokens
+         FROM _smithers_events
+         WHERE type = 'TokenUsageReported' AND run_id = ?
+         GROUP BY node_id, iteration`,
+      )
+      .all(runId) as TokenEventRow[];
+  } finally {
+    db.close();
+  }
+}
+
+function queryAgentModels(runId: string): AgentModelRow[] {
+  const db = openDatabase();
+  try {
+    return db
+      .query(
+        `SELECT node_id, iteration, attempt,
+                json_extract(meta_json, '$.agentModel') as agent_model
+         FROM _smithers_attempts
+         WHERE run_id = ? AND meta_json IS NOT NULL`,
+      )
+      .all(runId) as AgentModelRow[];
+  } finally {
+    db.close();
+  }
+}
+
+function groupRunsByRepo(rows: RunRow[], nowMs: number) {
+  const repoMap = new Map<
+    string,
+    { name: string; path: string; runs: unknown[] }
+  >();
+
+  for (const row of rows) {
+    const repoPath = row.vcs_root ?? "unknown";
+    const repoName = basename(repoPath);
+
+    if (!repoMap.has(repoPath)) {
+      repoMap.set(repoPath, { name: repoName, path: repoPath, runs: [] });
+    }
+
+    repoMap.get(repoPath)!.runs.push({
+      id: row.run_id,
+      workflow: row.workflow_name,
+      workflowPath: row.workflow_path,
+      status: row.status,
+      startedAtMs: row.started_at_ms,
+      elapsedMs: row.started_at_ms ? nowMs - row.started_at_ms : null,
+      finishedAtMs: row.finished_at_ms,
+    });
+  }
+
+  return Array.from(repoMap.values());
+}
+
+function buildTokenMap(rows: TokenEventRow[]) {
+  const map: Record<
+    string,
+    { input: number; output: number; cacheRead: number; total: number }
+  > = {};
+  for (const row of rows) {
+    const key = `${row.node_id}:${row.iteration}`;
+    map[key] = {
+      input: row.input_tokens ?? 0,
+      output: row.output_tokens ?? 0,
+      cacheRead: row.cache_read_tokens ?? 0,
+      total:
+        (row.input_tokens ?? 0) +
+        (row.output_tokens ?? 0) +
+        (row.cache_read_tokens ?? 0),
+    };
+  }
+  return map;
+}
+
+function buildAgentMap(rows: AgentModelRow[]) {
+  const map: Record<string, string> = {};
+  for (const row of rows) {
+    if (row.agent_model) {
+      map[`${row.node_id}:${row.iteration}:${row.attempt}`] = row.agent_model;
+    }
+  }
+  return map;
+}
+
+// --- Smithers CLI ---
 
 type Json = Record<string, unknown>;
 
 async function runSmithers(args: string[]) {
   const proc = Bun.spawn({
     cmd: [smithersBin, ...args, "--format", "json"],
-    cwd: process.cwd(),
+    cwd: workspaceRoot,
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -58,23 +203,35 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 4) {
   throw lastError;
 }
 
-function json(data: unknown, status = 200) {
+// --- Graph cache ---
+
+const graphCache = new Map<string, { data: Json; cachedAtMs: number }>();
+const GRAPH_CACHE_TTL_MS = 60_000;
+
+async function getWorkflowGraph(workflowPath: string) {
+  const cached = graphCache.get(workflowPath);
+  const now = Date.now();
+  if (cached && now - cached.cachedAtMs < GRAPH_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  const data = await runSmithers(["graph", workflowPath]);
+  graphCache.set(workflowPath, { data, cachedAtMs: now });
+  return data;
+}
+
+// --- HTTP helpers ---
+
+function jsonResponse(data: unknown, status = 200) {
   return Response.json(data, { status });
 }
 
 function errorResponse(error: unknown, status = 500) {
   const message = error instanceof Error ? error.message : String(error);
-  return json({ error: message }, status);
+  return jsonResponse({ error: message }, status);
 }
 
-function activeStatus(status: string) {
-  return [
-    "running",
-    "waiting-timer",
-    "waiting-event",
-    "waiting-approval",
-  ].includes(status);
-}
+// --- Build ---
 
 async function buildDashboardBundle() {
   await mkdir(buildDir, { recursive: true });
@@ -97,12 +254,15 @@ async function buildDashboardBundle() {
 
 const dashboardBundle = buildDashboardBundle();
 
+// --- Server ---
+
 const server = Bun.serve({
   port: Number(process.env.PORT || 4311),
   idleTimeout: 30,
   async fetch(req) {
     const url = new URL(req.url);
 
+    // Static assets
     if (url.pathname === "/") {
       await dashboardBundle;
       return new Response(await readFile(indexPath), {
@@ -123,22 +283,34 @@ const server = Bun.serve({
       });
     }
 
+    // API: list all runs grouped by repo
     if (url.pathname === "/api/runs") {
       try {
-        const runs = (await withRetry(() => runSmithers(["ps"]))) as {
-          runs?: Array<Record<string, unknown>>;
-        };
-        const items = (runs.runs ?? []).map((run) => ({
-          ...run,
-          isActive: activeStatus(String(run.status ?? "")),
-        }));
-        return json({
-          runs: items,
-          workspace: {
-            name: workspaceName,
-            root: workspaceRoot,
-            databasePath,
-          },
+        const rows = queryAllRuns();
+        const repos = groupRunsByRepo(rows, Date.now());
+        return jsonResponse({ repos, now: new Date().toISOString() });
+      } catch (error) {
+        return errorResponse(error);
+      }
+    }
+
+    // API: run detail
+    const runMatch = url.pathname.match(/^\/api\/run\/([^/]+)$/);
+    if (runMatch) {
+      const runId = decodeURIComponent(runMatch[1]);
+      try {
+        const [inspect, why, tokenRows, agentRows] = await Promise.all([
+          withRetry(() => runSmithers(["inspect", runId])),
+          withRetry(() => runSmithers(["why", runId])),
+          Promise.resolve(queryTokenUsage(runId)),
+          Promise.resolve(queryAgentModels(runId)),
+        ]);
+
+        return jsonResponse({
+          inspect,
+          why,
+          tokensByNode: buildTokenMap(tokenRows),
+          agentByNode: buildAgentMap(agentRows),
           now: new Date().toISOString(),
         });
       } catch (error) {
@@ -146,13 +318,13 @@ const server = Bun.serve({
       }
     }
 
-    const match = url.pathname.match(/^\/api\/run\/([^/]+)$/);
-    if (match) {
-      const runId = decodeURIComponent(match[1]);
+    // API: workflow graph topology
+    const graphMatch = url.pathname.match(/^\/api\/graph\/(.+)$/);
+    if (graphMatch) {
+      const workflowPath = decodeURIComponent(graphMatch[1]);
       try {
-        const inspect = await withRetry(() => runSmithers(["inspect", runId]));
-        const why = await withRetry(() => runSmithers(["why", runId]));
-        return json({ inspect, why, now: new Date().toISOString() });
+        const graph = await getWorkflowGraph(workflowPath);
+        return jsonResponse(graph);
       } catch (error) {
         return errorResponse(error);
       }
