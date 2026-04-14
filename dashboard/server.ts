@@ -27,6 +27,7 @@ type RunRow = {
   created_at_ms: number;
   started_at_ms: number | null;
   finished_at_ms: number | null;
+  input_payload: string | null;
 };
 
 type TokenEventRow = {
@@ -54,15 +55,17 @@ function queryAllRuns(): RunRow[] {
     // continued-as-new predecessors that smithers never marked finished.
     return db
       .query(
-        `SELECT run_id, workflow_name, workflow_path, status, vcs_root,
-                created_at_ms, started_at_ms, finished_at_ms
-         FROM _smithers_runs
+        `SELECT r.run_id, r.workflow_name, r.workflow_path, r.status,
+                r.vcs_root, r.created_at_ms, r.started_at_ms,
+                r.finished_at_ms, i.payload AS input_payload
+         FROM _smithers_runs r
+         LEFT JOIN input i ON i.run_id = r.run_id
          WHERE NOT (
-           status = 'running'
-           AND heartbeat_at_ms IS NOT NULL
-           AND heartbeat_at_ms < ?
+           r.status = 'running'
+           AND r.heartbeat_at_ms IS NOT NULL
+           AND r.heartbeat_at_ms < ?
          )
-         ORDER BY created_at_ms DESC`,
+         ORDER BY r.created_at_ms DESC`,
       )
       .all(nowMs - STALE_HEARTBEAT_THRESHOLD_MS) as RunRow[];
   } finally {
@@ -121,6 +124,16 @@ function groupRunsByRepo(rows: RunRow[], nowMs: number) {
       repoMap.set(repoPath, { name: repoName, path: repoPath, runs: [] });
     }
 
+    // Parse input payload to extract useful context (e.g. target repo, PR)
+    let inputContext: Record<string, string> | undefined;
+    if (row.input_payload) {
+      try {
+        inputContext = JSON.parse(row.input_payload);
+      } catch {
+        // Ignore invalid JSON
+      }
+    }
+
     repoMap.get(repoPath)!.runs.push({
       id: row.run_id,
       workflow: row.workflow_name,
@@ -131,6 +144,7 @@ function groupRunsByRepo(rows: RunRow[], nowMs: number) {
         ? (row.finished_at_ms ?? nowMs) - row.started_at_ms
         : null,
       finishedAtMs: row.finished_at_ms,
+      input: inputContext,
     });
   }
 

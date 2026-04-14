@@ -212,6 +212,15 @@ pre {
   flex-wrap: wrap;
 }
 
+.run-card-subtitle {
+  font-size: 11px;
+  color: var(--accent);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .run-card-meta {
   font-size: 11px;
   color: var(--muted);

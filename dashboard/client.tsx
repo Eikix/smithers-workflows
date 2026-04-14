@@ -24,6 +24,7 @@ type RunSummary = {
   startedAtMs: number | null;
   elapsedMs: number | null;
   finishedAtMs: number | null;
+  input?: Record<string, string>;
 };
 
 type RunsResponse = {
@@ -598,10 +599,21 @@ function Sidebar({
                     </span>
                   )}
                 </div>
+                {run.input?.repo && (
+                  <div className="run-card-subtitle">{run.input.repo}</div>
+                )}
                 <div className="run-card-details">
                   <span className="run-card-meta">
                     {formatDuration(run.elapsedMs)}
                   </span>
+                  {run.input?.run && (
+                    <span className="run-card-meta">
+                      run #{run.input.run.slice(-6)}
+                    </span>
+                  )}
+                  {run.input?.pr && (
+                    <span className="run-card-meta">PR #{run.input.pr}</span>
+                  )}
                 </div>
               </button>
             ))}
