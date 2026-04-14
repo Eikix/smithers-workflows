@@ -559,7 +559,164 @@ function Sidebar({
   );
 }
 
-// Components will follow in Tasks 6-7.
+// ---- Canvas components ----
+
+function NodeCard({
+  node,
+  step,
+  tokens,
+  agentModel,
+  loopIteration,
+}: {
+  node: LayoutNode;
+  step?: Step;
+  tokens?: { input: number; output: number; cacheRead: number; total: number };
+  agentModel?: string;
+  loopIteration?: number;
+}) {
+  const state = nodeStateFromStep(step);
+  const barClass =
+    state === "done"
+      ? "done"
+      : state === "failed"
+        ? "failed"
+        : state === "pending"
+          ? "pending"
+          : node.type;
+
+  return (
+    <div className={`node-card ${state}`} style={{ left: node.x, top: node.y }}>
+      <div className={`node-card-bar ${barClass}`} />
+      <div className="node-card-body">
+        <div className="node-type-label">{node.type}</div>
+        <div className="node-name">{node.label}</div>
+        <div className="node-status-line">
+          {step?.state ?? "pending"}
+          {step?.attempt && step.attempt > 1
+            ? ` · attempt ${step.attempt}`
+            : ""}
+        </div>
+        {tokens || agentModel ? (
+          <div className="node-detail-line">
+            {agentModel ? shortenModelName(agentModel) : ""}
+            {agentModel && tokens ? " · " : ""}
+            {tokens ? `${formatTokenCount(tokens.total)} tokens` : ""}
+          </div>
+        ) : null}
+        {loopIteration != null ? (
+          <div className="node-badges">
+            <span className="node-badge">iter {loopIteration}</span>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function computeBezierPath(
+  sourceX: number,
+  sourceY: number,
+  targetX: number,
+  targetY: number,
+): string {
+  const midX = (sourceX + targetX) / 2;
+  return `M ${sourceX} ${sourceY} C ${midX} ${sourceY}, ${midX} ${targetY}, ${targetX} ${targetY}`;
+}
+
+function WireOverlay({
+  layout,
+  steps,
+}: {
+  layout: LayoutResult;
+  steps: Step[];
+}) {
+  const nodePositions = useMemo(() => {
+    const map = new Map<string, { x: number; y: number }>();
+    for (const node of layout.nodes) {
+      map.set(node.id, { x: node.x, y: node.y });
+    }
+    return map;
+  }, [layout.nodes]);
+
+  const stepMap = useMemo(() => {
+    const map = new Map<string, Step>();
+    for (const step of steps) {
+      // Use the latest step entry per id (steps can appear multiple times for different iterations)
+      map.set(step.id, step);
+    }
+    return map;
+  }, [steps]);
+
+  return (
+    <svg
+      className="wire-layer"
+      width={layout.width + 80}
+      height={layout.height + 80}
+    >
+      {layout.edges.map((edge) => {
+        const source = nodePositions.get(edge.sourceId);
+        const target = nodePositions.get(edge.targetId);
+        if (!source || !target) return null;
+
+        const sourceStep = stepMap.get(edge.sourceId);
+        const targetStep = stepMap.get(edge.targetId);
+        const sourceState = nodeStateFromStep(sourceStep);
+        const targetState = nodeStateFromStep(targetStep);
+
+        let wireClass = "wire wire-pending";
+        if (sourceState === "done" && targetState === "running") {
+          wireClass = "wire wire-active";
+        } else if (sourceState === "done") {
+          wireClass = "wire wire-done";
+        } else if (sourceState === "failed") {
+          wireClass = "wire wire-failed";
+        }
+
+        const path = computeBezierPath(
+          source.x + NODE_WIDTH,
+          source.y + NODE_HEIGHT / 2,
+          target.x,
+          target.y + NODE_HEIGHT / 2,
+        );
+
+        return (
+          <path
+            key={`${edge.sourceId}-${edge.targetId}`}
+            className={wireClass}
+            d={path}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+function LoopBoundary({
+  loop,
+  iteration,
+}: {
+  loop: LayoutResult["loops"][number];
+  iteration?: number;
+}) {
+  return (
+    <div
+      className="loop-boundary"
+      style={{
+        left: loop.x,
+        top: loop.y,
+        width: loop.width,
+        height: loop.height,
+      }}
+    >
+      <span className="loop-label">
+        {loop.label}
+        {iteration != null ? ` · iter ${iteration}` : ""}
+      </span>
+    </div>
+  );
+}
+
+// Components will follow in Task 7.
 // For now, render a placeholder to verify the build works.
 
 function App() {
