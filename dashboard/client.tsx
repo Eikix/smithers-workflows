@@ -1,329 +1,210 @@
 /** @jsxImportSource react */
-import { startTransition, useEffect, useState } from "react";
+import {
+  startTransition,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { createRoot } from "react-dom/client";
 
-type Run = {
-  id?: string;
-  workflow?: string;
-  status?: string;
-  started?: string;
-  step?: string;
-  isActive?: boolean;
+// ---- Types ----
+
+type RepoGroup = {
+  name: string;
+  path: string;
+  runs: RunSummary[];
+};
+
+type RunSummary = {
+  id: string;
+  workflow: string;
+  workflowPath: string | null;
+  status: string;
+  startedAtMs: number | null;
+  elapsedMs: number | null;
+  finishedAtMs: number | null;
 };
 
 type RunsResponse = {
-  runs?: Run[];
-  workspace?: {
-    name?: string;
-    root?: string;
-    databasePath?: string;
-  };
-  now?: string;
+  repos: RepoGroup[];
+  now: string;
 };
 
 type Step = {
-  id?: string;
-  state?: string;
+  id: string;
+  state: string;
   label?: string;
   attempt?: number;
   output?: unknown;
 };
 
 type LoopState = {
-  loopId?: string;
-  iteration?: number;
+  loopId: string;
+  iteration: number;
 };
 
 type TimerState = {
-  timerId?: string;
+  timerId: string;
   remaining?: string;
   firesAt?: string;
 };
 
-type InspectResponse = {
-  inspect?: {
+type Blocker = {
+  kind: string;
+  nodeId: string;
+  reason?: string;
+};
+
+type RunDetailResponse = {
+  inspect: {
     run?: {
-      id?: string;
-      workflow?: string;
-      status?: string;
+      id: string;
+      workflow: string;
+      status: string;
       started?: string;
       elapsed?: string;
-      input?: Record<string, unknown>;
     };
     steps?: Step[];
     loops?: LoopState[];
     timers?: TimerState[];
   };
-  why?: {
+  why: {
     summary?: string;
     currentNodeId?: string;
-    blockers?: Array<{
-      kind?: string;
-      reason?: string;
-      context?: string;
-    }>;
+    blockers?: Blocker[];
   };
-  now?: string;
+  tokensByNode: Record<
+    string,
+    { input: number; output: number; cacheRead: number; total: number }
+  >;
+  agentByNode: Record<string, string>;
+  now: string;
 };
 
-async function fetchJson<T>(path: string) {
+type XmlNode = {
+  kind: "element" | "text";
+  tag?: string;
+  props?: Record<string, string>;
+  children?: XmlNode[];
+  text?: string;
+};
+
+type GraphResponse = {
+  xml: XmlNode;
+  tasks: Array<{
+    nodeId: string;
+    ordinal: number;
+    iteration: number;
+    ralphId?: string;
+  }>;
+};
+
+type LayoutNode = {
+  id: string;
+  type: "task" | "timer" | "branch" | "sequence" | "loop";
+  label: string;
+  x: number;
+  y: number;
+  loopId?: string;
+  parentIds: string[];
+  childIds: string[];
+};
+
+type LayoutEdge = {
+  sourceId: string;
+  targetId: string;
+};
+
+type LayoutResult = {
+  nodes: LayoutNode[];
+  edges: LayoutEdge[];
+  loops: Array<{
+    id: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    label: string;
+  }>;
+  width: number;
+  height: number;
+};
+
+// ---- Constants ----
+
+const NODE_WIDTH = 220;
+const NODE_HEIGHT = 120;
+const GAP_X = 80;
+const GAP_Y = 60;
+const LOOP_PADDING = 24;
+const POLL_INTERVAL_MS = 5000;
+
+// ---- Fetch helpers ----
+
+async function fetchJson<T>(path: string): Promise<T> {
   const response = await fetch(path);
-  if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
-  }
+  if (!response.ok) throw new Error(`Request failed: ${response.status}`);
   return (await response.json()) as T;
 }
 
-function statusTone(status?: string) {
-  if (!status) return "tone-neutral";
+// ---- Status helpers ----
+
+function statusTone(status?: string): string {
+  if (!status) return "neutral";
   if (
-    ["running", "waiting-timer", "waiting-event", "waiting-approval"].includes(
-      status,
-    )
+    [
+      "running",
+      "waiting-timer",
+      "waiting-event",
+      "waiting-approval",
+      "in-progress",
+    ].includes(status)
   )
-    return "tone-live";
-  if (["finished", "success", "completed"].includes(status)) return "tone-good";
-  if (["failed", "cancelled", "blocked"].includes(status)) return "tone-bad";
-  return "tone-warn";
+    return "live";
+  if (["finished", "success", "completed"].includes(status)) return "good";
+  if (["failed", "cancelled"].includes(status)) return "bad";
+  return "warn";
 }
 
-function prettyJson(value: unknown) {
-  return JSON.stringify(value ?? {}, null, 2);
+function nodeStateFromStep(step?: Step): string {
+  if (!step) return "pending";
+  const state = step.state ?? "";
+  if (state === "finished") return "done";
+  if (state === "failed") return "failed";
+  if (state === "running" || state === "in-progress") return "running";
+  if (state.startsWith("waiting")) return "waiting";
+  if (state === "skipped") return "skipped";
+  return "pending";
 }
+
+function formatDuration(ms: number | null | undefined): string {
+  if (ms == null || ms <= 0) return "";
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+}
+
+function formatTokenCount(total: number): string {
+  if (total < 1000) return `${total}`;
+  return `${Math.round(total / 1000)}k`;
+}
+
+function shortenModelName(model: string): string {
+  return model.replace("claude-", "").replace("gpt-", "");
+}
+
+// Components and layout engine will follow in Tasks 4-7.
+// For now, render a placeholder to verify the build works.
 
 function App() {
-  const [runs, setRuns] = useState<Run[]>([]);
-  const [selectedRunId, setSelectedRunId] = useState<string>("");
-  const [detail, setDetail] = useState<InspectResponse | null>(null);
-  const [workspace, setWorkspace] = useState<RunsResponse["workspace"] | null>(
-    null,
-  );
-  const [updatedAt, setUpdatedAt] = useState("loading");
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let alive = true;
-
-    const loadRuns = async () => {
-      try {
-        const data = await fetchJson<RunsResponse>("/api/runs");
-        if (!alive) return;
-        startTransition(() => {
-          const nextRuns = data.runs ?? [];
-          setRuns(nextRuns);
-          setWorkspace(data.workspace ?? null);
-          setUpdatedAt(data.now ?? new Date().toISOString());
-          setSelectedRunId((current) => {
-            if (current && nextRuns.some((run) => run.id === current)) {
-              return current;
-            }
-            return nextRuns[0]?.id ?? "";
-          });
-          setError("");
-        });
-      } catch (nextError) {
-        if (!alive) return;
-        setError(
-          nextError instanceof Error ? nextError.message : String(nextError),
-        );
-      }
-    };
-
-    void loadRuns();
-    const timer = window.setInterval(() => {
-      void loadRuns();
-    }, 5000);
-
-    return () => {
-      alive = false;
-      window.clearInterval(timer);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!selectedRunId) {
-      setDetail(null);
-      return;
-    }
-
-    let alive = true;
-
-    const loadDetail = async () => {
-      try {
-        const data = await fetchJson<InspectResponse>(
-          `/api/run/${encodeURIComponent(selectedRunId)}`,
-        );
-        if (!alive) return;
-        startTransition(() => {
-          setDetail(data);
-          setError("");
-        });
-      } catch (nextError) {
-        if (!alive) return;
-        setError(
-          nextError instanceof Error ? nextError.message : String(nextError),
-        );
-      }
-    };
-
-    void loadDetail();
-    const timer = window.setInterval(() => {
-      void loadDetail();
-    }, 5000);
-
-    return () => {
-      alive = false;
-      window.clearInterval(timer);
-    };
-  }, [selectedRunId]);
-
-  const run = detail?.inspect?.run;
-  const blocker = detail?.why?.blockers?.[0];
-  const steps = detail?.inspect?.steps ?? [];
-  const loops = detail?.inspect?.loops ?? [];
-  const timer = detail?.inspect?.timers?.[0];
-
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="sidebar-head">
-          <div>
-            <p className="eyebrow">Runtime</p>
-            <h1>Smithers runs</h1>
-            <p className="workspace-label">
-              {workspace?.name ?? "unknown workspace"}
-            </p>
-          </div>
-          <p className="meta-text">{updatedAt}</p>
-        </div>
-
-        <div className="panel workspace-panel">
-          <p className="eyebrow">Serving from</p>
-          <p className="workspace-path">{workspace?.root ?? "loading..."}</p>
-          <p className="meta-text">
-            DB {workspace?.databasePath ?? "loading..."}
-          </p>
-        </div>
-
-        {error ? <div className="notice notice-bad">{error}</div> : null}
-
-        <div className="run-list">
-          {runs.map((runItem) => {
-            const id = runItem.id ?? "";
-            const active = id === selectedRunId;
-            return (
-              <button
-                key={id}
-                className={`run-card${active ? " active" : ""}`}
-                onClick={() => setSelectedRunId(id)}
-                type="button"
-              >
-                <div className="run-card-top">
-                  <strong>{runItem.workflow ?? "workflow"}</strong>
-                  <span className={`pill ${statusTone(runItem.status)}`}>
-                    {runItem.status ?? "unknown"}
-                  </span>
-                </div>
-                <p className="run-id">{id}</p>
-                <p className="meta-text">{runItem.step ?? "no active step"}</p>
-                <p className="meta-text">
-                  {runItem.started ?? "no start time"}
-                </p>
-              </button>
-            );
-          })}
-        </div>
-      </aside>
-
-      <main className="main">
-        <section className="hero panel">
-          <div>
-            <p className="eyebrow">Selected run</p>
-            <h2>{run?.workflow ?? "No run selected"}</h2>
-            <p className="meta-text">
-              {run?.id ?? "Choose a run from the left."}
-            </p>
-          </div>
-          <div className="pill-row">
-            <span className={`pill ${statusTone(run?.status)}`}>
-              {run?.status ?? "idle"}
-            </span>
-            {blocker?.kind ? (
-              <span className="pill tone-neutral">{blocker.kind}</span>
-            ) : null}
-          </div>
-        </section>
-
-        <section className="overview-grid">
-          <article className="panel">
-            <p className="eyebrow">Loop state</p>
-            {loops.length ? (
-              <div className="facts">
-                {loops.map((loop) => (
-                  <div key={loop.loopId ?? "loop"} className="fact">
-                    <span>{loop.loopId ?? "loop"}</span>
-                    <strong>iteration {loop.iteration ?? 0}</strong>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="meta-text">No loop metadata.</p>
-            )}
-          </article>
-
-          <article className="panel">
-            <p className="eyebrow">Blocker</p>
-            <h3>{detail?.why?.summary ?? "No blocker summary"}</h3>
-            <p className="meta-text">
-              {detail?.why?.currentNodeId ?? "No current node"}
-            </p>
-          </article>
-
-          <article className="panel">
-            <p className="eyebrow">Timer</p>
-            <pre className="code-block">
-              {prettyJson(timer ?? { state: "no timer active" })}
-            </pre>
-          </article>
-        </section>
-
-        <section className="panel">
-          <div className="section-head">
-            <div>
-              <p className="eyebrow">Execution path</p>
-              <h3>Steps</h3>
-            </div>
-          </div>
-          <div className="step-grid">
-            {steps.length ? (
-              steps.map((step, index) => (
-                <article
-                  key={`${step.id ?? "step"}-${index}`}
-                  className={`step-card ${statusTone(step.state)}`}
-                >
-                  <div className="step-top">
-                    <strong>{step.label ?? step.id ?? "step"}</strong>
-                    <span className="step-type">
-                      attempt {step.attempt ?? 0}
-                    </span>
-                  </div>
-                  <p className="meta-text">{step.state ?? "unknown"}</p>
-                  {step.output ? (
-                    <pre className="code-block">{prettyJson(step.output)}</pre>
-                  ) : null}
-                </article>
-              ))
-            ) : (
-              <div className="empty-state">No step data yet.</div>
-            )}
-          </div>
-        </section>
-
-        <section className="panel">
-          <p className="eyebrow">Why</p>
-          <pre className="code-block">{prettyJson(detail?.why ?? {})}</pre>
-        </section>
-      </main>
+      <div className="canvas-empty">Dashboard loading...</div>
     </div>
   );
 }
