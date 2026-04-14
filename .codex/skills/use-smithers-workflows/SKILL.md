@@ -1,11 +1,26 @@
 ---
 name: use-smithers-workflows
-description: Use when working inside the smithers-workflows repository to run, refine, derive, or add Smithers workflows. Use when asked to create a new reusable workflow from an existing pattern, adapt implement-review-fix, ci-babysit, or pr-babysit to a new use case, or explain how to invoke the repository workflows with bunx.
+description: Use when a task should invoke, compose, derive, or extend workflows from the personal Smithers workflow library, regardless of the current repository. Use when the user wants reusable loops like implement-review-fix, ci-babysit, ci-watch-babysit, or pr-babysit applied to work in another repo such as fhevm, or when a new workflow should be derived from those patterns.
 ---
 
 # Use Smithers Workflows
 
-Work from the repository as it exists now. Do not assume upstream Smithers examples still match this repo.
+Use this skill when the workflow library should be used as an execution or composition tool, even if the current working repository is not the workflow library itself.
+
+The workflow library lives at:
+
+- `/Users/work/code/smithers-workflows`
+
+The target work may live elsewhere, for example:
+
+- `/Users/work/.codex/worktrees/.../fhevm`
+
+Do not assume the current repo is the workflow repo. Distinguish clearly between:
+
+- the workflow library repo
+- the target repo where implementation or CI work happens
+
+Work from the workflow repository as it exists now. Do not assume upstream Smithers examples still match this repo.
 
 ## Repository contract
 
@@ -14,6 +29,27 @@ Work from the repository as it exists now. Do not assume upstream Smithers examp
 - Keep workflows small, composable, and opinionated.
 - Keep prompts generic and reusable; do not add project-specific or personal context.
 - Keep the staple roster small unless a new workflow is clearly justified.
+
+## How to think about scope
+
+This skill is for choosing and using workflow patterns, not for mechanically forcing Smithers into every task.
+
+Use it when the user wants behavior like:
+
+- implement, review, fix, loop until clean
+- monitor CI over time and keep acting
+- monitor a PR and keep reacting to checks or comments
+- compose multiple known workflow patterns into one higher-level flow
+
+Do not use it merely because files happen to live in the workflow repo.
+
+If the task is mainly:
+
+- debugging Smithers itself
+- investigating an upstream Smithers runtime bug
+- changing the workflow library internals
+
+then use this skill only for local repo conventions when needed, not as the framing for the whole task.
 
 ## Current baseline
 
@@ -52,6 +88,20 @@ Start from the nearest existing workflow:
 
 When a request can be expressed as a composition or refinement of one of these, modify or derive that workflow.
 
+Common target-repo mappings:
+
+- feature implementation with iterative review
+  - start from `implement-review-fix`
+- investigate a failing GitHub Actions run once
+  - start from `ci-babysit`
+- monitor a GitHub Actions run over time and keep acting
+  - start from `ci-watch-babysit`
+- inspect or babysit a PR
+  - start from `pr-babysit`
+- implement -> review -> fix -> push draft PR -> watch CI/PR -> keep fixing
+  - compose `implement-review-fix` with `ci-watch-babysit` and `pr-babysit`
+  - if that composition becomes a recurring pattern, derive a new workflow instead of repeating ad hoc glue
+
 Only create a brand-new workflow when:
 
 - no existing workflow is structurally close, and
@@ -73,6 +123,12 @@ Use the repo-local Smithers CLI, not `bunx smithers-orchestrator`. This reposito
 ```bash
 ./node_modules/.bin/smithers
 ```
+
+When invoked from another repo, keep the working-repo boundary explicit:
+
+- run Smithers commands from `/Users/work/code/smithers-workflows`
+- pass the target repo or GitHub identifiers as workflow input
+- make code changes in the target repo, not in the workflow repo, unless the task is to evolve the workflow library itself
 
 List available workflows:
 
@@ -192,3 +248,19 @@ When asked to explain or use a workflow:
 1. Read the actual workflow file.
 2. Read any components and prompts it imports.
 3. Explain the current implementation, not a guessed Smithers pattern.
+
+## Cross-repo execution pattern
+
+When the user is in another repo and wants to use the workflow library:
+
+1. Identify the target repo and the target task.
+2. Choose the nearest existing workflow from the library.
+3. Decide whether the task is:
+   - direct invocation
+   - light composition of existing workflows
+   - or a reusable new derived workflow
+4. Run the workflow from `/Users/work/code/smithers-workflows`.
+5. Apply resulting code changes only in the target repo.
+6. Keep workflow-library edits separate from target-repo edits unless the user explicitly wants both.
+
+Do not blur these boundaries in commits or explanations.
