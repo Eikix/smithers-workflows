@@ -46,13 +46,15 @@ type AgentModelRow = {
 };
 
 const STALE_HEARTBEAT_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+const STALE_TIMER_THRESHOLD_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 function queryAllRuns(): RunRow[] {
   const db = openDatabase();
   try {
     const nowMs = Date.now();
-    // Exclude "running" rows with a stale heartbeat — these are
-    // continued-as-new predecessors that smithers never marked finished.
+    // Exclude orphaned runs:
+    // 1. "running" with stale heartbeat — continued-as-new predecessors
+    // 2. "waiting-timer" with no node updates in 30+ min — stuck/abandoned
     return db
       .query(
         `SELECT r.run_id, r.workflow_name, r.workflow_path, r.status,
@@ -63,11 +65,19 @@ function queryAllRuns(): RunRow[] {
          WHERE NOT (
            r.status = 'running'
            AND r.heartbeat_at_ms IS NOT NULL
-           AND r.heartbeat_at_ms < ?
+           AND r.heartbeat_at_ms < ?1
+         )
+         AND NOT (
+           r.status = 'waiting-timer'
+           AND (SELECT MAX(n.updated_at_ms) FROM _smithers_nodes n
+                WHERE n.run_id = r.run_id) < ?2
          )
          ORDER BY r.created_at_ms DESC`,
       )
-      .all(nowMs - STALE_HEARTBEAT_THRESHOLD_MS) as RunRow[];
+      .all(
+        nowMs - STALE_HEARTBEAT_THRESHOLD_MS,
+        nowMs - STALE_TIMER_THRESHOLD_MS,
+      ) as RunRow[];
   } finally {
     db.close();
   }
