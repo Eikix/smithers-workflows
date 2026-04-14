@@ -271,7 +271,11 @@ function buildEdgesFromXml(xml: XmlNode): LayoutEdge[] {
             }
           }
         }
-        previousOutputs = childOutputs;
+        // Only update previousOutputs when childOutputs is non-empty.
+        // Empty branches/conditionals should not break the chain.
+        if (childOutputs.length > 0) {
+          previousOutputs = childOutputs;
+        }
         if (allOutputs.length === 0) allOutputs = childOutputs;
       }
 
@@ -640,9 +644,20 @@ function WireOverlay({
 
   const stepMap = useMemo(() => {
     const map = new Map<string, Step>();
+    const stateRank = (state?: string) => {
+      if (!state || state === "pending") return 0;
+      if (state.startsWith("waiting")) return 1;
+      if (state === "running" || state === "in-progress") return 2;
+      if (state === "finished") return 3;
+      if (state === "failed") return 3;
+      return 0;
+    };
     for (const step of steps) {
-      // Use the latest step entry per id (steps can appear multiple times for different iterations)
-      map.set(step.id, step);
+      const existing = map.get(step.id);
+      // Keep the most advanced state (finished/running over pending)
+      if (!existing || stateRank(step.state) > stateRank(existing.state)) {
+        map.set(step.id, step);
+      }
     }
     return map;
   }, [steps]);
