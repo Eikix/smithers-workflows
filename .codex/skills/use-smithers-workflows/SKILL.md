@@ -68,6 +68,12 @@ Only create a brand-new workflow when:
 
 ## Invocation
 
+Use the repo-local Smithers CLI, not `bunx smithers-orchestrator`. This repository relies on its installed runtime and workflow pack:
+
+```bash
+./node_modules/.bin/smithers
+```
+
 List available workflows:
 
 ```bash
@@ -77,20 +83,54 @@ bun run workflow:list
 Run a workflow directly:
 
 ```bash
-bunx smithers-orchestrator up .smithers/workflows/<workflow>.tsx
+./node_modules/.bin/smithers up .smithers/workflows/<workflow>.tsx
 ```
 
 Typical examples:
 
 ```bash
-bunx smithers-orchestrator up .smithers/workflows/implement-review-fix.tsx --input '{"prompt":"Implement the requested change."}'
-bunx smithers-orchestrator up .smithers/workflows/ci-babysit.tsx --input '{"repo":"owner/name","run":"123456789"}'
-bunx smithers-orchestrator up .smithers/workflows/pr-babysit.tsx --input '{"repo":"owner/name","pr":"42"}'
+./node_modules/.bin/smithers up .smithers/workflows/implement-review-fix.tsx --input '{"prompt":"Implement the requested change."}'
+./node_modules/.bin/smithers up .smithers/workflows/ci-babysit.tsx --input '{"repo":"owner/name","run":"123456789"}'
+./node_modules/.bin/smithers up .smithers/workflows/pr-babysit.tsx --input '{"repo":"owner/name","pr":"42"}'
 ```
 
 ## Local dashboard
 
 When a workflow is launched for monitoring, babysitting, or any long-running task, also make the local dashboard available unless it is clearly unnecessary.
+
+For long-running workflows, a detached run alone is not sufficient. Timer-based workflows persist state in `smithers.db`, but they do not keep resuming themselves unless a supervisor loop is running.
+
+For these workflows:
+
+- `ci-watch-babysit`
+- any workflow that uses `Timer`
+- any workflow expected to keep acting while the user is away
+
+Preferred approach: use `tmux` so the supervisor is owned by the OS session rather than the launching chat/tool process.
+
+Launch all three:
+
+1. the run in detached mode
+2. the supervisor loop in a long-lived `tmux` session
+3. the dashboard
+
+Use:
+
+```bash
+./node_modules/.bin/smithers up -d .smithers/workflows/<workflow>.tsx --input '{...}'
+tmux has-session -t smithers-supervisor 2>/dev/null || \
+  tmux new -d -s smithers-supervisor './node_modules/.bin/smithers supervise --interval 10s --stale-threshold 30s'
+bun run dashboard
+```
+
+Do not present `smithers up` by itself as durable monitoring. Without `supervise`, the run will reach `waiting-timer`, the CLI will exit, and nothing will resume it.
+
+Operational notes:
+
+- Prefer reusing the same `tmux` session name: `smithers-supervisor`.
+- If the supervisor command changes, replace the session intentionally instead of spawning duplicates.
+- Report to the user that the long-lived supervisor is running in `tmux`, not inside the chat process.
+- If `tmux` is unavailable, state that clearly and fall back to a normal long-lived terminal process only as a weaker alternative.
 
 - Start the dashboard with:
 
