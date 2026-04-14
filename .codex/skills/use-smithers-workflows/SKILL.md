@@ -118,15 +118,24 @@ Use:
 
 ```bash
 ./node_modules/.bin/smithers up -d .smithers/workflows/<workflow>.tsx --input '{...}'
-tmux has-session -t smithers-supervisor 2>/dev/null || \
-  tmux new -d -s smithers-supervisor './node_modules/.bin/smithers supervise --interval 10s --stale-threshold 30s'
+bun run supervisor:start
 bun run dashboard
+```
+
+Supervisor lifecycle commands:
+
+```bash
+bun run supervisor:start
+bun run supervisor:status
+bun run supervisor:stop-if-idle
 ```
 
 Do not present `smithers up` by itself as durable monitoring. Without `supervise`, the run will reach `waiting-timer`, the CLI will exit, and nothing will resume it.
 
 Operational notes:
 
+- `supervisor:start` must be treated as idempotent.
+- Reuse one supervisor per Smithers DB / repo runtime, not one per workflow.
 - Prefer reusing the same `tmux` session name: `smithers-supervisor`.
 - If the supervisor command changes, replace the session intentionally instead of spawning duplicates.
 - Report to the user that the long-lived supervisor is running in `tmux`, not inside the chat process.
