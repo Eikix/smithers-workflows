@@ -3,7 +3,7 @@ import {
   ClaudeCodeAgent,
   CodexAgent,
   type AgentLike,
-} from "smithers-orchestrator";
+} from "smthrs";
 
 export const providers = {
   claudeOpus: new ClaudeCodeAgent({ model: "claude-opus-4-6" }),

@@ -1,6 +1,6 @@
 // smithers-source: custom
 // smithers-display-name: CI Watch Babysit
-/** @jsxImportSource smithers-orchestrator */
+/** @jsxImportSource smthrs */
 import {
   Branch,
   Loop,
@@ -8,7 +8,7 @@ import {
   Task,
   Timer,
   createSmithers,
-} from "smithers-orchestrator";
+} from "smthrs";
 import { z } from "zod/v4";
 import { agents } from "~/agents";
 import FixPrompt from "~/.smithers/prompts/ci-fix.mdx";
