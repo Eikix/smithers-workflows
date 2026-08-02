@@ -66,7 +66,7 @@ Check these files first before making changes:
 
 As of this repository state:
 
-- Smithers runtime dependency is `smithers-orchestrator` from npm.
+- Smithers runtime dependency is `smthrs` from npm.
 - The repo is configured around `typescript ~5.9.3`.
 - The repo expects `zod ^4.3.6`.
 - Hooks are managed with `prek`.
@@ -118,7 +118,7 @@ Only create a brand-new workflow when:
 
 ## Invocation
 
-Use the repo-local Smithers CLI, not `bunx smithers-orchestrator`. This repository relies on its installed runtime and workflow pack:
+Use the repo-local Smithers CLI, not `bunx smthrs`. This repository relies on its installed runtime and workflow pack:
 
 ```bash
 ./node_modules/.bin/smithers

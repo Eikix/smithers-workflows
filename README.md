@@ -33,7 +33,7 @@ Private Smithers workflow library for repeatable coding and GitHub operations.
 ```bash
 bun install
 bun run workflow:list
-bunx smithers-orchestrator up .smithers/workflows/implement-review-fix.tsx
+bunx smthrs up .smithers/workflows/implement-review-fix.tsx
 ```
 
 ## Dashboard

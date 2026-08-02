@@ -1,6 +1,6 @@
 // smithers-source: custom
-/** @jsxImportSource smithers-orchestrator */
-import { Parallel, Task, type AgentLike } from "smithers-orchestrator";
+/** @jsxImportSource smthrs */
+import { Parallel, Task, type AgentLike } from "smthrs";
 import { z } from "zod/v4";
 import ReviewLeanPrompt from "~/.smithers/prompts/review-lean.mdx";
 

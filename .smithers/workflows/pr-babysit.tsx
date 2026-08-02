@@ -1,7 +1,7 @@
 // smithers-source: custom
 // smithers-display-name: PR Babysit
-/** @jsxImportSource smithers-orchestrator */
-import { createSmithers, Task, Sequence } from "smithers-orchestrator";
+/** @jsxImportSource smthrs */
+import { createSmithers, Task, Sequence } from "smthrs";
 import { z } from "zod/v4";
 import { agents } from "~/agents";
 import ObservePrompt from "~/.smithers/prompts/pr-observe.mdx";

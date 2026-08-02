@@ -1,6 +1,6 @@
 // smithers-source: custom
-/** @jsxImportSource smithers-orchestrator */
-import { Loop, Sequence, Task, type AgentLike } from "smithers-orchestrator";
+/** @jsxImportSource smthrs */
+import { Loop, Sequence, Task, type AgentLike } from "smthrs";
 import { z } from "zod/v4";
 import { ReviewLean } from "~/.smithers/components/ReviewLean";
 import ImplementPrompt from "~/.smithers/prompts/implement.mdx";
